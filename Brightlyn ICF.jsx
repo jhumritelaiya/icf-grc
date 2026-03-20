@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { askGroq } from "./src/groqClient.js";
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, PieChart, Pie, Cell, Legend, AreaChart, Area } from "recharts";
 import { Shield, LayoutDashboard, Library, FileCheck, FileText, Users, BarChart3, AlertTriangle, ChevronRight, ChevronDown, Search, Bell, Settings, LogOut, Plus, Filter, Download, Upload, Eye, Edit, Trash2, Check, X, Clock, TrendingUp, AlertCircle, CheckCircle, XCircle, ArrowRight, Layers, Globe, Lock, Activity, Zap, ChevronLeft, MoreVertical, RefreshCw, Star, BookOpen, ShieldCheck, Target, Briefcase, Database, Server, Cloud, Key, FileWarning, UserCheck, Menu, ChevronUp, Copy, MessageSquare, Send } from "lucide-react";
 
@@ -5821,21 +5822,44 @@ const ComplianceAI = () => {
     };
   };
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim() && uploadedDocs.length === 0) return;
-    var msgText = input;
-    var userMsg = { id: messages.length + 1, role: "user", text: msgText, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), mode: activeMode };
+    const msgText = input;
+    const userMsg = { id: messages.length + 1, role: "user", text: msgText, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), mode: activeMode };
     setMessages(prev => [...prev, userMsg]);
-    var savedInput = input;
     setInput("");
     setIsTyping(true);
 
-    setTimeout(() => {
-      var response = getAIResponse(savedInput);
-      var aiMsg = { id: messages.length + 2, role: "assistant", text: response.text, time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }), sources: response.sources, mode: activeMode };
+    try {
+      // Build conversation history for Groq (last 10 messages for context)
+      const history = [...messages, userMsg]
+        .slice(-10)
+        .map(m => ({ role: m.role === "assistant" ? "assistant" : "user", content: m.text }));
+
+      const replyText = await askGroq(history);
+      const aiMsg = {
+        id: messages.length + 2,
+        role: "assistant",
+        text: replyText,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        sources: [],
+        mode: activeMode,
+      };
       setMessages(prev => [...prev, aiMsg]);
+    } catch (err) {
+      console.error("Groq API error:", err);
+      const errMsg = {
+        id: messages.length + 2,
+        role: "assistant",
+        text: "Sorry, I encountered an error reaching the AI service. Please try again.",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        sources: [],
+        mode: activeMode,
+      };
+      setMessages(prev => [...prev, errMsg]);
+    } finally {
       setIsTyping(false);
-    }, 1200 + Math.random() * 800);
+    }
   };
 
   const handleSuggestion = (q) => { setInput(q); };
